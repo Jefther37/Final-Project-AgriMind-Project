@@ -42,3 +42,16 @@ def register_admin(email, password):
     except Exception as e:
         st.error(f"Registration failed: {e}")
         return False
+
+# utils/supabase_client.py
+
+def login_admin(email: str, password: str) -> bool:
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        return response.user is not None
+    except Exception as e:
+        print("Login error:", e)
+        return False
