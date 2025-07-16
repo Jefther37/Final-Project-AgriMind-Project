@@ -1,57 +1,63 @@
-import streamlit as st
+import os
 from supabase import create_client, Client
+from datetime import datetime
 import pandas as pd
+import streamlit as st
 
 # Load Supabase credentials from Streamlit secrets
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_URL = st.secrets["supabase"]["url"]
+SUPABASE_KEY = st.secrets["supabase"]["key"]
 
-# Initialize Supabase client
+# Create Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Insert user message and mood into the database
-def insert_message(text, mood):
+# ------------------ Insert Chat Message ------------------ #
+def insert_message(name: str, message: str, mood: str):
     try:
         response = supabase.table("messages").insert({
-            "text": text,
-            "mood": mood
+            "name": name,
+            "message": message,
+            "mood": mood,
+            "timestamp": datetime.now().isoformat()
         }).execute()
-        return response
+        return True, "Message saved"
     except Exception as e:
-        st.error(f"Error inserting message: {e}")
-        return None
+        return False, f"Insert failed: {e}"
 
-# Fetch historical mood data for visualization and CSV export
+# ------------------ Fetch Mood Stats ------------------ #
 def fetch_mood_stats():
     try:
-        response = supabase.table("messages").select("*").order("created_at", desc=True).execute()
-        data = response.data
-        return pd.DataFrame(data)
+        response = supabase.table("messages").select("*").order("timestamp", desc=True).execute()
+        records = response.data
+        if records:
+            df = pd.DataFrame(records)
+            return df
+        else:
+            return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error fetching mood stats: {e}")
+        print("Error fetching mood stats:", e)
         return pd.DataFrame()
 
-# Register an admin (only via email/password)
-def register_admin(email, password):
+# ------------------ Register Admin ------------------ #
+def register_admin(email: str, password: str):
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters"
     try:
-        response = supabase.auth.sign_up({
-            "email": email,
-            "password": password
-        })
-        return True if response.user else False
+        auth_response = supabase.auth.sign_up({"email": email, "password": password})
+        if auth_response.user:
+            return True, "Registration successful"
+        else:
+            return False, "Registration failed"
     except Exception as e:
-        st.error(f"Registration failed: {e}")
-        return False
+        return False, str(e)
 
-# utils/supabase_client.py
-
-def login_admin(email: str, password: str) -> bool:
+# ------------------ Login Admin ------------------ #
+def login_admin(email: str, password: str):
     try:
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-        return response.user is not None
+        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if auth_response.user:
+            return True, "Login successful"
+        else:
+            return False, "Login failed"
     except Exception as e:
-        print("Login error:", e)
-        return False
+        return False, str(e)
