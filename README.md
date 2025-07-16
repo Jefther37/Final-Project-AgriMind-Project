@@ -2,6 +2,8 @@
 
 **AgriMind** is an AI-powered mental health assistant built specifically for farmers and agricultural workers. It leverages sentiment analysis to detect emotional states from user input and offers empathetic, AI-generated responses. This tool helps address stress, anxiety, and depression common in rural communities, contributing to UN SDG 3 (Good Health & Well-being) and SDG 2 (Zero Hunger).
 
+The app is deployed and live on stramlit cloud: https://final-project-agrimind-project-jscg2qikwlc6qutqptsyar.streamlit.app/
+
 ## 🚀 Features
 
 - 🌾 Farmer-focused mental health assistant
