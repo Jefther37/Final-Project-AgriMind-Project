@@ -1,38 +1,44 @@
 import streamlit as st
 from supabase import create_client, Client
-from datetime import datetime
+import pandas as pd
 
-# Load credentials securely from Streamlit secrets
+# Load Supabase credentials from Streamlit secrets
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-# Create Supabase client
+# Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Insert a new mood message with timestamp
-def insert_message(user_input, mood_label):
-    response = supabase.table("messages").insert({
-        "message": user_input,
-        "mood": mood_label,
-        "timestamp": datetime.utcnow().isoformat()
-    }).execute()
-    return response
+# Insert user message and mood into the database
+def insert_message(text, mood):
+    try:
+        response = supabase.table("messages").insert({
+            "text": text,
+            "mood": mood
+        }).execute()
+        return response
+    except Exception as e:
+        st.error(f"Error inserting message: {e}")
+        return None
 
-# Fetch mood statistics for dashboard
+# Fetch historical mood data for visualization and CSV export
 def fetch_mood_stats():
-    response = supabase.table("messages").select("mood", "timestamp").execute()
-    return response.data
+    try:
+        response = supabase.table("messages").select("*").order("created_at", desc=True).execute()
+        data = response.data
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error fetching mood stats: {e}")
+        return pd.DataFrame()
 
-# Admin registration using Supabase Auth
+# Register an admin (only via email/password)
 def register_admin(email, password):
-    return supabase.auth.sign_up({
-        "email": email,
-        "password": password
-    })
-
-# Admin login using Supabase Auth
-def login_admin(email, password):
-    return supabase.auth.sign_in_with_password({
-        "email": email,
-        "password": password
-    })
+    try:
+        response = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+        return True if response.user else False
+    except Exception as e:
+        st.error(f"Registration failed: {e}")
+        return False
