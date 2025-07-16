@@ -1,95 +1,103 @@
 import streamlit as st
 import pandas as pd
+import time
 from utils.predict import predict_mood
 from utils.supabase_client import (
     insert_message, fetch_mood_stats,
     register_admin, login_admin
 )
-import pyttsx3
-import time
-from datetime import datetime
+import streamlit.components.v1 as components
 
-# ------------------------ CONFIGURATION ------------------------ #
-st.set_page_config(page_title="🌿 AgriMind Assistant", layout="wide")
+st.set_page_config(page_title="AgriMind Assistant", layout="wide")
 
-# ------------------------ HEADER ------------------------ #
-st.markdown("""
-    <h1 style='color:#228B22;'>🌿 AgriMind: AI-Powered Mental Health Assistant for Farmers</h1>
-    <p style='color:#1e90ff;'>Monitor mental well-being and visualize community mood</p>
-    <hr style='border-top: 2px solid #ccc;'/>
-""", unsafe_allow_html=True)
+# 🌿 Title and Info
+st.title("🌿 AgriMind: AI-Powered Mental Health Assistant for Farmers")
+st.markdown("Monitor mental well-being and visualize community mood")
+st.markdown("**App developed by Jefther Afuyo**  \nContact: afuyojefther@gmail.com")
 
-# ------------------------ CHAT SECTION ------------------------ #
-st.subheader("🤖 Talk to AgriMind")
+# 🔊 Function for Web Text-to-Speech
+def speak(message):
+    components.html(
+        f"""
+        <script>
+        var msg = new SpeechSynthesisUtterance();
+        msg.text = `{message}`;
+        window.speechSynthesis.speak(msg);
+        </script>
+        """,
+        height=0,
+    )
 
-with st.form(key="chat_form"):
-    user_name = st.text_input("Your Name")
-    user_message = st.text_area("How are you feeling today?")
-    submit = st.form_submit_button("Send")
+# Sidebar navigation
+menu = st.sidebar.radio("Navigation", ["🤖 Chatbot", "📈 Mood History", "🛡 Admin Login / Register"])
 
-if submit and user_message:
-    mood = predict_mood(user_message)
-    insert_message(user_name, user_message, mood)
+# SESSION state for chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    bot_response = f"I understand you're feeling {mood} today. Take care, {user_name}."
-    st.success(f"**Bot:** {bot_response}")
+# 💬 Chatbot Page
+if menu == "🤖 Chatbot":
+    name = st.text_input("Enter your name:")
+    user_message = st.text_input("Send a message:")
 
-    # Voice (optional)
-    try:
-        engine = pyttsx3.init()
-        engine.say(bot_response)
-        engine.runAndWait()
-    except:
-        st.warning("🔇 Voice feedback is unavailable in cloud deployment.")
+    if st.button("Send"):
+        if name and user_message:
+            prediction = predict_mood(user_message)
+            insert_message(name, user_message, prediction)
+            st.session_state.messages.append((name, user_message, prediction))
+            st.success(f"🧠 Mood Prediction: {prediction}")
+            speak(f"Your mood seems to be {prediction}")
+        else:
+            st.warning("Please enter your name and a message.")
 
-# ------------------------ MOOD HISTORY SECTION ------------------------ #
-st.subheader("📈 Community Mood Trends")
+    st.markdown("### 💬 Chat History")
+    for msg in st.session_state.messages[::-1]:
+        st.info(f"{msg[0]}: {msg[1]} → 🧠 Mood: {msg[2]}")
 
-try:
+# 📊 Mood History Page
+elif menu == "📈 Mood History":
     df = fetch_mood_stats()
-    if not df.empty:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        mood_count = df['mood'].value_counts()
-        st.bar_chart(mood_count)
-
-        # Download CSV
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Mood History CSV", csv, "mood_history.csv", "text/csv")
-
+    if df is not None and not df.empty:
+        st.markdown("### 📊 Community Mood Overview")
+        st.dataframe(df)
+        mood_counts = df['mood'].value_counts()
+        st.bar_chart(mood_counts)
     else:
-        st.info("No mood data yet. Start chatting to populate insights.")
+        st.warning("No mood data available yet.")
 
-except Exception as e:
-    st.error(f"Error loading mood history: {e}")
+# 🔐 Admin Page
+elif menu == "🛡 Admin Login / Register":
+    st.markdown("### 👤 Admin Authentication")
 
-# ------------------------ ADMIN SECTION ------------------------ #
-st.subheader("🔒 Admin Access")
+    auth_option = st.radio("Choose action", ["Register", "Login"])
 
-with st.expander("Admin Login / Register"):
-    auth_choice = st.radio("Select action", ["Login", "Register"])
-    admin_email = st.text_input("Email", key="admin_email")
-    admin_password = st.text_input("Password (min 8 characters)", type="password", key="admin_password")
+    admin_email = st.text_input("Email")
+    admin_password = st.text_input("Password", type="password")
 
     if st.button("Submit"):
-        if auth_choice == "Register":
-            success, msg = register_admin(admin_email, admin_password)
+        if auth_option == "Register":
+            try:
+                register_admin(admin_email, admin_password)
+                st.success("✅ Admin registered successfully!")
+            except Exception as e:
+                st.error(f"Registration failed: {e}")
         else:
-            success, msg = login_admin(admin_email, admin_password)
+            try:
+                user = login_admin(admin_email, admin_password)
+                st.success("✅ Logged in successfully!")
+                st.json(user)
+            except Exception as e:
+                st.error(f"Login failed: {e}")
 
-        if success:
-            st.success("✅ Auth successful")
-            # Dashboard only visible when logged in
-            with st.expander("📊 Admin Dashboard", expanded=True):
-                st.write("All mood entries:")
-                st.dataframe(df if not df.empty else pd.DataFrame(), use_container_width=True)
-        else:
-            st.error(f"❌ Auth failed: {msg}")
-
-# ------------------------ FOOTER ------------------------ #
-st.markdown("""
-    <hr>
-    <div style='text-align:center; font-size: 14px; color: #888;'>
-        App developed by <strong>Jefther Afuyo</strong><br>
-        Contact: afuyojefther@gmail.com
+# 🌍 Footer Section
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; font-size: 14px; color: grey;'>
+        &copy; 2025 AgriMind | Developed by <strong>Jefther Simeon Afuyo</strong> |
+        Contact: <a href="mailto:afuyojefther@gmail.com">afuyojefther@gmail.com</a>
     </div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
+# Add a small delay to ensure the page loads smoothly
